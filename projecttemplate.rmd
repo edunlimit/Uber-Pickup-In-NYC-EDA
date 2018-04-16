@@ -1,0 +1,581 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+NYC Uber Pick Ups with Weather and Holidays by Minsup Sim
+========================================================
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE, packages}
+# Load all of the packages that you end up using in your analysis in this code
+# chunk.
+
+# Notice that the parameter "echo" was set to FALSE for this code chunk. This
+# prevents the code from displaying in the knitted HTML output. You should set
+# echo=FALSE for all code chunks in your file, unless it makes sense for your
+# report to show the code that generated a particular plot.
+
+# The other parameters for "message" and "warning" should also be set to FALSE
+# for other code chunks once you have verified that each plot comes out as you
+# want it to. This will clean up the flow of your report.
+
+library(ggplot2)
+library(gridExtra)
+library(tidyr)
+library(dplyr)
+library(GGally)
+library(lattice)
+library(memisc)
+```
+
+```{r echo=FALSE, Load_the_Data}
+# Load the Data
+uber_raw<-read.csv('uber_nyc_enriched.csv')
+uber<-subset(uber_raw, !is.na(uber_raw$borough))
+```
+
+Since I want to analyze pickups in Month, Day, time, and weekdays, I created new variables.
+
+```{r new_variables}
+
+date_conversion<-strptime(as.character(uber$pickup_dt), format='%m/%d/%Y %H:%M')
+date_conversion$zone <- NULL
+uber$month<-format(date_conversion,"%m")
+uber$hour<-format(date_conversion,"%H")
+uber$day<-format(date_conversion,"%d")
+uber$wday <- weekdays(date_conversion)
+```
+
+To check if there are any N/As I searched for any N/As:
+
+```{r echo=FALSE,checkNA}
+#check if there is anyother N/As
+table(is.na(uber))
+```
+
+
+> **About**: This data contains uber pick up details from 01/01/2015 to 06/30/2015 with weather and holiday variables included. This data contains data of approximately 26000 pick ups. The purpose of this EDA would be to see relationship between pickups and other variables such as place, weather, and holiday
+
+# Univariate Plots Section
+
+
+Structure of uber dataset:
+
+```{r echo=FALSE, Structure}
+#Show Structure of uber dataset.
+str(uber)
+```
+
+Uber data set has 17 variables including newly created variables from above and about 26000 rows of information. 
+
+Summary of pickups variable:
+
+```{r echo=FALSE, Summary}
+
+#check summary of pickups
+summary(uber$pickups)
+
+```
+
+Summary shows median number of pickups is 86 times and max was 7883 times in one borough.
+
+Let's see how many times of pick up is most common.
+
+```{r echo=FALSE, pickuphist}
+#See how many times of pick ups is most common.
+ggplot(data=uber, aes(x=pickups))+
+  geom_histogram(binwidth = 70)
+ggplot(data=subset(uber, uber$pickups>0), aes(x=pickups))+
+  geom_histogram(binwidth = 0.05)+
+  scale_x_log10()
+```
+
+To see better distribution and et rid of long tail, I used log scale. I see multimodal distribution with highest count at around 900 pickups.
+
+NOw, since I think rain would affect lots of uber calls, I wanted to see how much it rained
+
+Checking summary of liquid precipitation:
+
+```{r echo=FALSE, liqsum}
+
+summary(uber$liq_precp_1hr)
+summary(uber$liq_precp_6hr)
+summary(uber$liq_precp_24hr)
+```
+
+To see how much rain is most common in one hour if it rained
+
+```{r echo=FALSE, rainonehr}
+
+#To see how much rain is most common in one hour if it rained
+ggplot(data=uber, aes(x=liq_precp_1hr))+
+  geom_histogram(binwidth = 0.005)+
+  xlim(c(0.0001,0.28))
+```
+
+In 6 hours:
+
+```{r echo=FALSE, rainsixhr}
+#in 6 hours
+ggplot(data=uber, aes(x=liq_precp_6hr))+
+  geom_histogram(binwidth = 0.005)+
+  xlim(c(0.0001,1.24))
+```
+
+In 24 hours:
+
+```{r echo=FALSE, raintwofourhr}
+#in 24 hours
+ggplot(data=uber, aes(x=liq_precp_24hr))+
+  geom_histogram(binwidth = 0.01)+
+  xlim(c(0.001,2.1))
+```
+
+For snow:
+
+```{r echo=FALSE, snow}
+#and snow
+summary(uber$snow_depth_in)
+ggplot(data=uber, aes(x=snow_depth_in))+
+  geom_histogram(binwidth = 0.2)+
+  scale_x_continuous(lim=c(0.1,19), breaks = seq(0.1,19,2))
+```
+
+To see better distribution, I excluded 0 snow depth since it was surely too many days without snow compared to days with snow and was able to find out around 8.0 inches was most common snow depth.
+
+And for temperature:
+
+```{r echo=FALSE, tempF}
+#Temperature:
+ggplot(data=uber, aes(x=temp_F))+
+  geom_histogram(binwidth=1)
+```
+
+Interestingly, it seems like temperature has bimodal form of distribution. 
+
+
+
+# Univariate Analysis
+
+
+### What is the structure of your dataset?
+NYC data set has about 26000 rows of data and have 15 variables that has date, number of pickups on certain day and time, borough in Newyork, weather information such as temperature, liquid precipitation for 1, 6 and 24 hours, sea level pressure, dew point, snow depth if it snowed, visible mile, and if the day was holiday or not.
+
+### What is/are the main feature(s) of interest in your dataset?
+Main features of interest are number of pickups, temperature, visibility in 10th of miles, month, hour, holiday or not, snow depth and liquid precipitation. These features can impact number of pickups so I think it's important to understand how these features can change the business. 
+
+### What other features in the dataset do you think will help support your\
+investigation into your feature(s) of interest?
+###Did you create any new variables from existing variables in the dataset?
+
+I thought dividing data into month and hour would help me investigate deeper into each data so I made another columns that have month and hour variable. 
+
+
+### Of the features you investigated, were there any unusual distributions? \
+Did you perform any operations on the data to tidy, adjust, or change the form \
+of the data? If so, why did you do this?
+
+Usually histograms were long tailed since kind of variables are something that does not happen often. For exmaple, rain can pour a lot, but that is only on occasions. For pick up histogram is was expected to see high numbers in lower pick up counts since high number of pick ups is hard to achieve. 
+
+
+# Bivariate Plots Section
+
+Main output feature would be pick-ups.
+Before investigating relationship with pick ups, I also wanted to check how rain and snow impacts visibility only to make sure if dataset is properly interpreted. Surely, it is expected to see bad visibility in a bad weather like lots of rain and snow. 
+
+```{r echo=FALSE, visib_milevsliq_precp}
+
+ggplot(data= uber, aes(x=visib_mile, y=liq_precp_24hr))+
+  geom_jitter()+
+  geom_line(stat='summary', fun.y=median, color='red')
+ggplot(data=uber, aes(x=visib_mile, y=snow_depth_in))+
+  geom_jitter()+
+  geom_line(stat='summary', fun.y=median, color='red')
+
+```
+
+As I expected bad weather gave bad visibility.
+
+Also just to check I decided to plot snow vs month plot to see graph I'm expecting
+
+```{r echo=FALSE, monthvssnow}
+
+ggplot(data=uber, aes(x=month, y=snow_depth_in))+
+  geom_bar(stat='identity')
+
+```
+
+I found out that it snows more often on February.
+
+What about month vs rain?
+
+```{r echo=FALSE, monthvsliqtwofour}
+
+ggplot(data=uber, aes(x=month, y=liq_precp_24hr))+
+  geom_bar(stat='identity')
+
+```
+
+It can be seen that ther was more liquid precipitation during January. 
+
+
+
+Now to know how these variables impact pick ups, I first plotted liquid precipitation vs pickups
+
+```{r echo=FALSE, liqvspickups}
+
+ggplot(data=uber, aes(x=liq_precp_24hr, y=pickups))+
+  geom_point(alpha=1/10)+
+  geom_line(stat='summary', fun.y=median, color='red')
+ggplot(data=uber, aes(x=liq_precp_6hr, y=pickups))+
+  geom_point(alpha=1/10)
+
+```
+
+According to median line, it seems like there is not much relationship between rain and pickup. 
+
+for snow:
+
+```{r echo=FALSE, snowvspickups}
+
+ggplot(data=uber, aes(x=snow_depth_in, y=pickups))+
+  geom_jitter(alpha=1/10)+
+  geom_line(stat='summary', fun.y=median, color='red')
+
+```
+
+For snow, unlike rains, it is comparably more diversed. It seems like snow does not effect much on pick up calls.
+
+For more details I divided into each boroughs:
+
+
+```{r echo=FALSE, snowvspickupborough}
+
+ggplot(data=uber, aes(x=snow_depth_in, y=pickups)) +
+  geom_point()+
+  facet_wrap(~borough)+
+  geom_line(stat='summary', fun.y=median, color='red')
+
+```
+
+From above plot, I was clearly able to see that snow depth does not affect uber pickups since it's uniformly distributed other than Manhattan. For Manhattan it seems like median graph is unimodal at around 10inch of snow. It seems like you get more pickups on non-snowing days, but it's because you have more non-snowing days than snowing days. To show this, I added median summary line on top of the graph and you can see that it's uniform shaped. 
+
+
+Which month is most likely to get a pick up?
+
+```{r echo=FALSE, monthvspickup}
+
+ggplot(data=uber, aes(x=month, y=pickups))+
+  geom_boxplot()+
+  coord_cartesian(ylim=c(0,1000))
+
+ggplot(data=uber, aes(x=month, y=pickups))+
+  geom_bar(stat='identity')+
+  facet_wrap(~borough)
+
+```
+
+It seems like as the weather gets warmer people calls for pickup more
+And I was able to see that it applies to all the borough. In Manhattan, February got more pickups than on March. Maybe it's because it snowed most on February. And since Manhattan is busy city, to go to work there is high possibility people called Uber because of snow. 
+
+which hour is most likeyly to get a pick up?
+
+```{r echo=FALSE, hourvspickup}
+
+q1=ggplot(data=uber, aes(x=hour, y=pickups))+
+  geom_boxplot()+
+  coord_cartesian(ylim=c(0,1000))
+q2=ggplot(data=uber, aes(x=hour, y=pickups))+
+  geom_jitter(alpha=1/10)
+grid.arrange(q1,q2,ncol=1)
+```
+
+It can be seen that during night time there are more pick ups. During morning it can be seen that it is getting high pick ups, maybe because in some borough, citizens take uber to work.
+Let's see which borough gets most pickups.
+
+```{r echo=FALSE, boroughvspickup}
+
+ggplot(data=uber, aes(x=borough, y=pickups))+
+  geom_boxplot()+
+  coord_cartesian(ylim=c(0,3500))
+ggplot(data=uber, aes(x=borough, y= log(pickups)))+
+  geom_bar(stat='identity')
+check<-subset(uber, uber$borough=='EWR')
+```
+
+As I expected it is certain to get more pick ups in Manhattan. I was thinking at EWR(Newark Airpot), there would be more pickups, but seems like there is less pickups, but would get paid more since they are more likely to drive longer distances. It would've been better if the dataset had prices column as well.
+
+To check the weirdness of such low pickup rates in EWR, I decided to check if EWR data set have some problems, and I found out all the pickups are 0 in EWR.
+
+
+Let's see if temperature affects pickups
+My guess is that as it gets colder and hotter, there wil be more pick ups.
+
+```{r echo=FALSE, tempvspickup}
+
+ggplot(data=uber, aes(x=temp_F, y=pickups))+
+  geom_jitter(alpha=1/10)+
+  xlim(c(2,89))+
+  coord_cartesian(ylim=c(0,1000))+
+  geom_line(stat='summary', fun.y=median, color='red')
+
+cor.test(uber$pickups, uber$temp_F)
+
+```
+
+Through median line, it can be seen that during around 60 F there are more pickups but it's not definite. I tested the relationship between pickups and temperature using correlation coefficient, but it was not meaningful.
+
+To see if holiday lets uber drivers make more money
+
+```{r echo=FALSE, hdayvspickup}
+
+ggplot(data=uber, aes(x=hday, y=pickups))+
+  geom_boxplot()+
+  coord_cartesian(ylim=c(0,700))+
+  stat_summary(fun.y=mean, geom='point', shape=4)
+
+```
+
+Unlike what I expected, holidays doesn't help drivers to get more pick ups.
+I checked mean of each, but mean won't help much since there are some outliers. In this case, median would be more accurate to look at and median is almost the same in both holidays and none holidays.
+finally I decided to see how visibility in miles to nearest tenth affected pickups
+
+```{r echo=FALSE, visibvspickup}
+
+ggplot(data=uber, aes(x=visib_mile, y=pickups))+
+  geom_jitter(alpha=1/50)+
+  geom_line(stat='summary', fun.y=median, color='red')
+
+```
+
+After plotting I found out this graph is not accurate since there are more days that had better visibility so will have more pickups added.
+To fix that problem, I added stat summary line that shows median values of pick up and found out visibility does not affect number of pickups
+
+I also wanted to see which week day would have most pickups so I created new variable wday. And here is a plot:
+
+```{r echo=FALSE, wdayvspickup}
+ggplot(data=uber, aes(x=wday, y=pickups))+
+  geom_boxplot()+
+  coord_cartesian(ylim=c(0,1000))+
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+It can be seen that during weekends there are more uber pickups called and after that is friday that got most pickups. 
+
+After examining holiday vs non-holiday, I thought dividing working day and none working day would be good idea.
+
+```{r echo=FALSE,workday}
+uber$working_or_not<- ifelse(uber$wday=='Saturday'|uber$wday=='Sunday'|uber$hday=='Y', 'Non-Working', 'Working')
+
+ggplot(data=uber, aes(x=working_or_not, y=pickups))+
+  geom_boxplot()+
+  coord_cartesian(ylim = c(0,800))
+```
+
+According to the plot, it can be seen during non-working days, uber drivers gets slightly more pickups than working days.
+
+
+There were some strong relationships between pickups and time and week day as well as borough. 
+
+I was also able to find that on 2015, February got most snows in NYC
+
+
+# Bivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the \
+investigation. How did the feature(s) of interest vary with other features in \
+the dataset?
+
+First just to confirm my thinking of visibility I made a plot of weather over visibility. And as I was expecting, I was able to see that in a bad weather, visibility is bad. 
+I was also able to find that in 2015, Newyork got more snow on February than January and March. After that I was able to see how month or hour impacts pickup numbers. 
+
+### What was the strongest relationship you found?
+
+Relationship was most clear in number of pickups vs borough plot. It shows Manhattan gets significantly more pickups than other boroughs. 
+
+# Multivariate Plots Section
+
+To see how hour affects pick up numbers over month, I first wanted to see how morning to afternoon affected it. 
+
+```{r echo=FALSE, monthvspickups_color_hours}
+morning_uber<- subset(uber,as.numeric(uber$hour)>=6&as.numeric(uber$hour)<=18)
+night_uber<- subset(uber,(as.numeric(uber$hour)>=0&as.numeric(uber$hour)<=5)|(as.numeric(uber$hour)<=23&as.numeric(uber$hour)>=19))
+
+
+q3<-ggplot(data=morning_uber, aes(x=month, y=pickups))+
+  geom_jitter(aes(color=hour), alpha=1/2)+
+  scale_color_brewer(palette = 'RdYlGn',
+                     guide=guide_legend(title = 'Hours',ncol=2))+
+  ggtitle('Number of Pickups over Month with Working Hours Colored')+
+  xlab('Month')+
+  ylab('Number of Pickups')+
+  theme_dark()
+q4<-ggplot(data=night_uber, aes(x=month, y=pickups))+
+  geom_jitter(aes(color=hour), alpha=1/2)+
+  scale_color_brewer(palette= 'RdYlGn',
+                     guide=guide_legend(title = 'Hours', ncol=2))+
+  ggtitle('Number of Pickups over Month with Night Hours Colored')+
+  xlab('Month')+
+  ylab('Number of Pickups')+
+  theme_dark()
+grid.arrange(q3,q4,ncol=1)
+```
+  
+From the two plots, I was able to find out that there are certain hours that have higher pickups than usual. For example, during working hours, at 17, there is high chance to get more pickups and during night time at 20 as well. 
+
+After observing above plot, I decided to see how it's different in each borough, so I divided plots to see:
+
+```{r echo=FALSE, month_workinghour_pickups_borough}
+q5<-ggplot(data=morning_uber, aes(x=month, y=pickups))+
+  geom_jitter(aes(color=hour), alpha=1/2)+
+  scale_color_brewer(palette = 'Paired',
+                     guide=guide_legend(title = 'Hours',ncol=2))+
+  ggtitle('Number of Pickups over Month with Working Hours Colored in Each Borough') +
+  facet_wrap(~borough)
+q6<-ggplot(data=night_uber, aes(x=month, y=pickups))+
+  geom_jitter(aes(color=hour), alpha=1/2)+
+  scale_color_brewer(palette= 'Paired',
+                     guide=guide_legend(title = 'Hours', ncol=2))+
+  ggtitle('Number of Pickups over Month with Night Hours Colored in Each Borough') +
+  facet_wrap(~borough)
+grid.arrange(q5,q6,ncol=1)
+```
+
+After observing above plot, I was only able to clearly see how hours impack pickups in each month in Manhattan. In other boroughs, it seems like time does not impack pickups much. 
+
+
+To see pickups in each hour over the different borough:
+
+```{r echo=FALSE, boroughvspickups_color_month}
+
+ggplot(data=uber, aes(x=hour, y=pickups))+
+  geom_jitter(aes(color=borough), alpha=1/5)
+
+```
+
+From this plot, I was able to see that in all of the areas, there was similar pattern but a lot more pickups in Manhattan. 
+
+To see how pick ups are distributed along the hours on working and non working day, I creted this plot:
+
+```{r echo=FALSE, pickupvshour_over_working_day_or_not}
+ggplot(data=uber, aes(x=hour, y=pickups))+
+  geom_jitter(aes(color=working_or_not), alpha=1/3)
+```
+
+I see a lot more working day dots, since there are more working days on calendar.
+To get more obervation, I again divided into each borough:
+
+```{r echo=FALSE, pickupvswday_over_working_day_or_not_divide}
+ggplot(data=uber, aes(x=wday, y=pickups))+
+  geom_jitter(aes(color=working_or_not), alpha=1/3)+
+  facet_wrap(~borough)+
+  theme(axis.text.x = element_text(angle = 70, hjust = 1))
+```
+
+I was hoping to see more clear observation on how working day and non-working day impact on pickups, and as the graph shows, there is little bit more bump on pickups during Non-working day. During weekends, it's clear to see the small bump of pickups, unlike holidays that doesn't show any differences. 
+
+I also wanted to make sure why over the month number of pickups were increasing. My guess was because temperature is getting warmer and to see if my assumption is right I plotted this graph:
+
+```{r echo=FALSE, monthvspickups_temp}
+ggplot(data=uber, aes(x=month, y=pickups))+
+  geom_jitter(aes(color=temp_F), alpha=1/2)
+```
+
+As it shows, temperature gets warmer as month and pickup numbers increases. It would have been more interesting to see full year and see number of pick ups over whole season. In the plot of temperature vs pickups, I was not able to see full relationship other than around 60F there is pick. Maybe there is certain temperature that people like to get on a uber.
+
+To see why only in Manhattan got more pickups on February, I decided to add snow_depth as a color.
+
+```{r echo=FALSE, snowimpact}
+ggplot(data=uber, aes(x=month, y=pickups, color=snow_depth_in))+
+  geom_bar(stat='identity')+
+  facet_wrap(~borough)
+```
+
+As the plot shows, there certainly was more snow on February and only in Manhattan there were more pickups.
+
+Now I think there might be a impack of rain only in Manhattan. To check I did the same as snow. 
+
+
+```{r echo=FALSE, rainimpact}
+ggplot(data=uber, aes(x=month, y=pickups, color=liq_precp_24hr))+
+  geom_bar(stat='identity')+
+  facet_wrap(~borough)
+```
+
+Unlike snow, rain did not impack any boroughs. 
+
+
+
+
+# Multivariate Analysis
+
+### Talk about some of the relationships you observed in this part of the \
+investigation. Were there features that strengthened each other in terms of \
+looking at your feature(s) of interest?
+
+From investigation, I was able to find how time of the day affects pick up numbers. Even through out months, popular hours does not change much. 
+
+### Were there any interesting or surprising interactions between features?
+
+Surprising fact was that weather does not affect number of pickups. Only in Manhattan, there was a difference in pickups when there was lots of snow. 
+Only not significant number of pickups were different in non-working days and working days. 
+
+
+### OPTIONAL: Did you create any models with your dataset? Discuss the \
+strengths and limitations of your model.
+
+Since all the data was not linear model, I did not create any linear regression model. 
+
+------
+
+# Final Plots and Summary
+
+### Plot One
+```{r echo=FALSE, Plot_One}
+ggplot(data=uber, aes(x=liq_precp_24hr, y=pickups/as.numeric(day)))+
+  geom_point(alpha=1/10)+
+  geom_line(stat='summary', fun.y=median, color='red')+
+  xlab('Liquid Precipitation in One day (inches)')+
+  ylab('Number of Pickups per day')+
+  ggtitle('Pickup Numbers per Day over Liquid Precipitation of One day')
+```
+
+### Description One
+As shown in the above graph, it is clear to see that liquid precipitation does not affect number of pickups. Median line shown is uniform shaped which means median does not change whether it rains alot or not. 
+
+### Plot Two
+```{r echo=FALSE, Plot_Two}
+grid.arrange(q3,q4,ncol=1)
+
+```
+
+### Description Two
+From the plot above, I was trying to find distribution of hours in number of pickups over month. Interestingly, I was able to find that at 17 in the working hours and at 20 in the night hours, there are most pickups in Manhattan. For other boroughs it was hard to see the pattern. 
+
+### Plot Three
+```{r echo=FALSE, Plot_Three}
+
+ggplot(data=uber, aes(x=month, y=pickups))+
+  geom_bar(stat='identity', aes(fill = snow_depth_in))+
+  facet_wrap(~borough)+
+  xlab('Month')+
+  ylab('Number of Pickups')+
+  ggtitle('Pickups over Month with Snow depth (in) in color')+
+  scale_fill_continuous(guide = guide_legend(title = "Snow Depth (in)"))
+```
+
+### Description Three
+I tried to see a relationship between total number of pickups comapred to different locations. It was clear that busier cities get more pickups. To find more relationship, I tried to see how weather impacts number of pickups at each boroughs, and interestingly, when there is more snow, there was more pickups in Manhattan. 
+
+------
+
+Reflection
+------
+
+From this EDA, I was able to find that weathers and holidays don't play a big role in number of pickups. Rather location and time made bigger impact on number of uber pick ups. Since it was hard to find relationship between features that I thought it would have, it was hard to explorer deeper.
+
+Things went well are my understanding of this data set. It was great thing to find that weathers and holidays do not play a big role in uber pickups. The result was big surprise to me, since I was expecting to see a strong relationship. I believe that with different kind of regression, we can build a predictive model using the dataset.  
